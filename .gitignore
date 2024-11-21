@@ -5,6 +5,7 @@
 *.suo
 *.db
 *.log
+*.so
 bin/
 build/
 .vs/
