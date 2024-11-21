@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mouse Tracker</title>
+    <style>
+        #image {
+            display: block;
+            margin: 0 auto;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <img id="image" src="image.png" alt="Trackable Image">
+    <script>
+        const image = document.getElementById('image');
+
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        const sendMousePosition = debounce((x, y) => {
+            console.log(`Mouse position: x=${x}, y=${y}`);
+
+            fetch('http://localhost:8000/mouse-position', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x, y })
+            });
+        }, 10); // 50ms timeout
+
+        image.addEventListener('mousemove', (event) => {
+            const rect = image.getBoundingClientRect();
+            const x = event.clientX - rect.left - rect.width / 2; // X position relative to image
+            const y = rect.top - event.clientY  + rect.height / 2;  // Y position relative to image
+
+            sendMousePosition(x, y);
+        });
+    </script>
+</body>
+</html>
