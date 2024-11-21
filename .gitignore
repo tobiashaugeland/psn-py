@@ -9,3 +9,4 @@
 bin/
 build/
 .vs/
+.vscode/
