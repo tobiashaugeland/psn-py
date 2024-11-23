@@ -1,11 +1,18 @@
 import psn
 import time
 import socket
-import requests
 import json
+import asyncio
+import websockets
 
 PSN_DEFAULT_UDP_PORT = 56565
 PSN_DEFAULT_UDP_MCAST_ADDRESS = "236.10.10.10"
+
+WS_PORT = 8000
+WS_IP = "localhost"
+
+# Global position variable
+position = psn.Float3(0, 0, 0)
 
 
 # Helper functions
@@ -23,46 +30,54 @@ def get_elapsed_time_ms():
 def pic_to_scene_coords(x, y):
     return x / 100, y / 100
 
-def run_psn_server():
+
+async def handle_websocket(websocket):
+    global position
+    async for message in websocket:
+        data = json.loads(message)
+        x, y = pic_to_scene_coords(data["x"], data["y"])
+        position = psn.Float3(x, y, 0)
+
+
+async def run_psn_server():
     print("Starting PSN server")
     # Setup a UDP socket to send tracker packets on
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # Encoder / Decoder
     encoder = psn.Encoder("Server 1")
-    decoder = psn.Decoder()
-    packets = []
     trackers = {}
     trackers[0] = psn.Tracker(0, "Tracker 0")
     trackers[0].set_pos(psn.Float3(0, 0, 0))
 
-    last_sent_time = get_elapsed_time_ms()
+    last_sent_info = get_elapsed_time_ms()
+    last_sent_data = get_elapsed_time_ms()
 
-    while True:
-        # for id, tracker in trackers.items():
-        #     old_x = tracker.get_pos().x if tracker.get_pos().x < 10 else -10
-        #     tracker.set_pos(psn.Float3(old_x + 0.005, 0, 0))
+    packets = []
 
-        time_stamp = get_elapsed_time_ms()
-        # if time_stamp % 16 == 0:
-        if time_stamp - last_sent_time >= 32:
-            r = requests.get("http://localhost:8000/mouse-position")
-            data = r.json()
-            x, y = pic_to_scene_coords(data["x"], data["y"])
-            trackers[0].set_pos(psn.Float3(x, y, 0))
-            packets.extend(encoder.encode_data(trackers, time_stamp))
-            last_sent_time = time_stamp
+    async with websockets.serve(handle_websocket, WS_IP, WS_PORT):
+        global position
+        while True:
+            time_stamp = get_elapsed_time_ms()
 
-        if time_stamp % 1000 == 0:
-            packets.extend(encoder.encode_info(trackers, time_stamp))
+            # Approx 30 fps
+            if time_stamp - last_sent_data >= 33:
+                trackers[0].set_pos(position)
+                packets.extend(encoder.encode_data(trackers, time_stamp))
+                last_sent_data = time_stamp
+                print(position.x, position.y)
 
-        for p in packets:
-            sock.sendto(p, (PSN_DEFAULT_UDP_MCAST_ADDRESS, PSN_DEFAULT_UDP_PORT))
+            if time_stamp - last_sent_info >= 1000:
+                packets.extend(encoder.encode_info(trackers, time_stamp))
+                last_sent_info = time_stamp
 
-        packets = []
+            for p in packets:
+                sock.sendto(p, (PSN_DEFAULT_UDP_MCAST_ADDRESS, PSN_DEFAULT_UDP_PORT))
 
-        time.sleep(0.001)
+            packets.clear()
+
+            await asyncio.sleep(0.001)
 
 
 if __name__ == "__main__":
-    run_psn_server()
+    asyncio.run(run_psn_server())
