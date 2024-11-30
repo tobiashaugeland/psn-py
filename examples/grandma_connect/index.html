@@ -43,9 +43,15 @@
         connectWebSocket();
 
         image.addEventListener('mousemove', (event) => {
+            const rect = image.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const x = event.clientX - centerX;
+            const y = centerY - event.clientY;
+
             const now = performance.now();
             if (ws.readyState === WebSocket.OPEN && now - lastSend >= 33.33) { // ~30 FPS
-                ws.send(JSON.stringify({ x: event.clientX, y: event.clientY }));
+                ws.send(JSON.stringify({ x: x, y: y }));
                 lastSend = now;
             }
         });

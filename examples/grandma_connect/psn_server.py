@@ -65,7 +65,7 @@ async def run_psn_server():
                 trackers[0].set_pos(position)
                 packets.extend(encoder.encode_data(trackers, time_stamp))
                 last_sent_data = time_stamp
-                print(position.x, position.y)
+                print(position.x, position.y, end="\r")
 
             if time_stamp - last_sent_info >= 1000:
                 packets.extend(encoder.encode_info(trackers, time_stamp))
