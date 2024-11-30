@@ -10,7 +10,6 @@ PSN_DEFAULT_UDP_MCAST_ADDRESS = "236.10.10.10"
 
 PORT = 8000
 IP = "0.0.0.0"
-SOCK = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 
 def get_time_ms():
@@ -28,32 +27,48 @@ def pic_to_scene_coords(x, y):
     return x / 200, y / 200
 
 
-def send_position(x: float, y: float, id: int = 0):
-    global SOCK
-
+def send_position(x: float, y: float, sock: socket.socket, id: int = 0):
+    trackers = {}
     encoder = psn.Encoder("Server 1")
     tracker = psn.Tracker(id, f"Tracker {id}")
     tracker.set_pos(psn.Float3(x, y, 0))
-    packet = encoder.encode_data(tracker, get_elapsed_time_ms())
-    SOCK.sendto(packet, (PSN_DEFAULT_UDP_MCAST_ADDRESS, PSN_DEFAULT_UDP_PORT))
+    trackers[id] = tracker
+    packets = encoder.encode_data(trackers, get_elapsed_time_ms())
+    for packet in packets:
+        sock.sendto(packet, (PSN_DEFAULT_UDP_MCAST_ADDRESS, PSN_DEFAULT_UDP_PORT))
 
 
 async def handle_websocket(request):
     ws = web.WebSocketResponse()
+    logging.debug("Websocket connection starting")
     await ws.prepare(request)
-    for msg in ws:
-        if msg.type == web.WSMsgType.TEXT:
-            logging.debug("Received message: %s" % msg.data)
+    logging.debug("Websocket connection ready")
 
-            # data = json.loads(msg.data)
-            # x, y = pic_to_scene_coords(data["x"], data["y"])
-            # send_position(x, y)
-            # ws.send_str(json.dumps({"x": x, "y": y}))
-        elif msg.type == web.WSMsgType.ERROR:
-            logging.error("ws connection closed with exception %s" % ws.exception())
-            # print("ws connection closed with exception %s" % ws.exception())
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+
+    try:
+        async for msg in ws:
+            logging.debug(f"Websocket data: {msg}")
+            if msg.type == web.WSMsgType.TEXT:
+                logging.debug("Received message: %s" % msg.data)
+
+                data = json.loads(msg.data)
+                x, y = pic_to_scene_coords(data["x"], data["y"])
+                send_position(x, y, sock)
+                ws.send_str(json.dumps({"x": x, "y": y}))
+            elif msg.type == web.WSMsgType.ERROR:
+                logging.error("ws connection closed with exception %s" % ws.exception())
+                print("ws connection closed with exception %s" % ws.exception())
+    except Exception as e:
+        logging.error(f"Websocket exception: {e}")
+
+    finally:
+        logging.debug("Websocket connection closing")
+        await ws.close()
 
     return ws
+
 
 
 

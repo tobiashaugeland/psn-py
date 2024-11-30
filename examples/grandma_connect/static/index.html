@@ -29,9 +29,10 @@
         let ws;
         let lastSend = 0;
         const reconnectInterval = 1000; // Reconnect interval in ms
+        const hostName = window.location.host;
 
         function connectWebSocket() {
-            ws = new WebSocket('ws://localhost:8000/ws'); // Replace with your WebSocket server address
+            ws = new WebSocket(`ws://${hostName}/ws`); // Replace with your WebSocket server address
 
             ws.onopen = () => {
                 console.log('Connected to WebSocket server');
@@ -52,20 +53,23 @@
 
         let isDragging = false;
 
-        ball.addEventListener('mousedown', (event) => {
+        const startDrag = (event) => {
             isDragging = true;
-        });
+            event.preventDefault();
+        };
 
-        document.addEventListener('mousemove', (event) => {
+        const drag = (event) => {
             if (isDragging) {
                 const rect = image.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
-                const x = event.clientX - centerX;
-                const y = centerY - event.clientY;
+                const clientX = event.clientX || event.touches[0].clientX;
+                const clientY = event.clientY || event.touches[0].clientY;
+                const x = clientX - centerX;
+                const y = centerY - clientY;
 
-                ball.style.left = `${event.clientX}px`;
-                ball.style.top = `${event.clientY}px`;
+                ball.style.left = `${clientX}px`;
+                ball.style.top = `${clientY}px`;
 
                 const now = performance.now();
                 if (ws.readyState === WebSocket.OPEN && now - lastSend >= 33.33) { // ~30 FPS
@@ -73,11 +77,20 @@
                     lastSend = now;
                 }
             }
-        });
+        };
 
-        document.addEventListener('mouseup', () => {
+        const endDrag = () => {
             isDragging = false;
-        });
+        };
+
+        ball.addEventListener('mousedown', startDrag);
+        ball.addEventListener('touchstart', startDrag);
+
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('touchmove', drag);
+
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
     </script>
 </body>
 
